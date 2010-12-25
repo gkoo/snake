@@ -1,0 +1,34 @@
+/* @head: head coordinates*/
+var Snake = function(/* optional */head, /*optional*/tail) {
+  this.body = [];
+  // TODO: implement head and tail arguments
+  this.body.push({x: 2, y: 0});
+  this.body.push({x: 1, y: 0});
+  this.body.push({x: 0, y: 0});
+}
+var Board = function() {
+  /* Private vars */
+  //var myPerson = new Person(),
+  var that = this,
+      worldElem = $('#world');
+      codeW = 87,
+      codeA = 65,
+      codeS = 83,
+      codeD = 68,
+      codeUp = 38,
+      codeLeft = 37,
+      codeRight = 39,
+      codeDown = 40,
+      codeSpace = 32;
+
+  /* Public vars and methods */
+  this.width = this.height = worldElem.children('li').length;
+  this.snakes = [];
+  this.addSnake = function(snake) {
+    this.snakes.push(snake);
+  }
+
+  var checkBounds = function(x, y) {
+    return (x >= 0 && x < that.width) && (y >= 0 && y < that.height);
+  }
+}

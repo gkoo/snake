@@ -1,0 +1,11 @@
+input(type='button',value='Players Ready')
+ul#world
+  - for (var i=0; i<dimSize; i++)
+    li
+      ul
+        -for (var j=0; j<dimSize; j++)
+          li
+
+script(src='/javascripts/jquery-1.4.4.min.js')
+script(src='/socket.io/socket.io.js')
+script(src='/javascripts/gamelogic.js')

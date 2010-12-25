@@ -1,0 +1,17 @@
+body {
+  padding: 50px;
+  font: 14px "Lucida Grande", Helvetica, Arial, sans-serif;
+}
+ul, li {
+  list-style: none;
+}
+li ul {
+  clear: left;
+  padding: 0;
+}
+li li { /* cell */
+  border: 1px solid black;
+  float: left;
+  height: 50px;
+  width: 50px;
+}
