@@ -176,6 +176,7 @@ socket.connect();
 socket.on('message', function(obj){
   // Initialize board.
   if ('snakes' in obj){
+    var mySessionId = 0;
     if ('sessionId' in obj) {
       mySessionId = obj.sessionId;
     }

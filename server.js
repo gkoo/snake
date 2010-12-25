@@ -56,9 +56,9 @@ var io = io.listen(app);
 
 /* @head: head coordinates*/
 /* @tail: tail coordinates*/
-var Snake = function(id, head, tail) {
+var Snake = function() {
   this.body = []; // array of coordinate objects
-  this.id = id;
+  this.id = -1;
   this.color = '#000'; // default black snake.
   this.addBodyPart = function(part) {
     this.body.push(part);
@@ -70,36 +70,11 @@ var Snake = function(id, head, tail) {
     this.body.unshift(newhead);
 
     worldGrid[oldtail.x][oldtail.y] = 0;
-    worldGrid[newhead.x][newhead.y] = id;
+    worldGrid[newhead.x][newhead.y] = this.id;
     return { newhead: newhead, oldtail: oldtail };
   };
-  this.destroy = function() {
-    // Remove snake from world grid.
-    for (var j=0; j<this.body.length; ++j) {
-      var bodyPart = this.body[j];
-      worldGrid[bodyPart.x][bodyPart.y] = 0;
-    }
-    for (var color in colors) {
-      if (colors[color] == this.id) {
-        colors[color] = -1;
-        break;
-      }
-    }
-  }
-  for (var color in colors) {
-    if (colors[color] == -1) {
-      colors[color] = this.id;
-      this.color = color;
-      break;
-    }
-    else {
-      console.log('Tried to assign ' + color + ' but it was assigned to ' + colors[color]);
-    }
-  }
-
-  // Fill in the body parts between head and tail.
-  // TODO: check that head and tail are on same x or y axis. right now it assumes that it is.
-  if (head && tail) {
+  // TODO: check that head and tail share either x or y axis. (right now, no checks)
+  this.setBody = function(head, tail) {
     var delta = 1; // direction in which we proceed from head to tail.
     this.addBodyPart(head);
 
@@ -123,6 +98,13 @@ var Snake = function(id, head, tail) {
     }
     this.addBodyPart(tail);
   }
+  this.destroy = function() {
+    // Remove snake from world grid.
+    for (var j=0; j<this.body.length; ++j) {
+      var bodyPart = this.body[j];
+      worldGrid[bodyPart.x][bodyPart.y] = 0;
+    }
+  }
 }
 
 var Player = function() {
@@ -130,6 +112,22 @@ var Player = function() {
   this.clientId = -1;
   this.startingPos = null;
   this.snake = null;
+
+  this.setSnake = function() {
+    this.snake = new Snake();
+    this.snake.id = this.clientId;
+    if (this.color) {
+      this.snake.color = this.color;
+    }
+    if (this.startingPos) {
+      console.log('setting start position');
+      this.snake.setBody(this.startingPos[0], this.startingPos[1]);
+    }
+    else {
+      console.log('didn not set');
+    }
+  };
+
   this.getRandStartPos = function() {
     var found = false;
     while (true) {
@@ -159,16 +157,13 @@ var snakes = {},
     worldGrid = [],
     colors = ['#f00', '#0d0', '#00f', '#0dd'],
     /* Starting corner positions */
-    upLtCornerPos = [ { x: 2, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 0 } ],
-    upRtCornerPos = [ { x: dimSize-1, y: 0 }, { x: dimSize-1, y: 1 }, { x: dimSize-1, y: 2 } ],
-    downRtCornerPos = [ { x: dimSize-3, y: dimSize-1 }, { x: dimSize-2, y: dimSize-1 }, { x: dimSize-1, y: dimSize-1 } ],
-    downLtCornerPos = [ { x: 2, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 0 } ],
+    upLtCornerPos = [ { x: 2, y: 0 }, { x: 0, y: 0 } ],
+    upRtCornerPos = [ { x: dimSize-1, y: 0 }, { x: dimSize-1, y: 2 } ],
+    downRtCornerPos = [ { x: dimSize-3, y: dimSize-1 }, { x: dimSize-1, y: dimSize-1 } ],
+    downLtCornerPos = [ { x: 2, y: 0 }, { x: 0, y: 0 } ],
     startPosArr = [upLtCornerPos, downRtCornerPos, upRtCornerPos, downLtCornerPos],
     players = [];
     numPlayers = 4,
-    getNextPos,
-    checkBounds,
-    printWorld;
 
 // Init players.
 (function () {
@@ -186,18 +181,18 @@ for (var i=0; i<dimSize; ++i) {
     worldGrid[i][j] = 0;
   }
 }
-getNextPos = function(snake, dx, dy) {
+var getNextPos = function(snake, dx, dy) {
   var newX = snake.body[0].x + dx;
   var newY = snake.body[0].y + dy;
   return { x: newX, y: newY };
 };
-checkBounds = function(x, y) {
+var checkBounds = function(x, y) {
   var inbounds = (x >= 0 && x < dimSize) && (y >= 0 && y < dimSize);
   inbounds = inbounds && (worldGrid[x][y] == 0);
   return inbounds;
 };
 // FOR DEBUG PURPOSES
-printWorld = function() {
+var printWorld = function() {
   var str;
   for (var i=0; i<dimSize; ++i) {
     str = '';
@@ -212,17 +207,39 @@ printWorld = function() {
     console.log(str);
   }
 };
+var getPlayerById = function(id) {
+  for (var i=0; i<players.length; ++i) {
+    if (players[i].clientId == id) {
+      return players[i];
+    }
+  }
+}
 
 io.on('connection', function(client) {
   // Store a new snake specific to client's sessionId.
-  var newsnake = new Snake(client.sessionId);
-  var deleteSnake;
-  snakes[client.sessionId] = newsnake;
-  console.log(client.sessionId + '\'s snake entered the world.');
+  var deleteSnake = function(id) {
+    var player = getPlayerById(id);
+    snake = player.snake;
+    snake.destroy();
+    player.id = -1;
+    // Remove snake from snakes array.
+    delete snakes[id];
+    io.broadcast({ 'disconnect': id });
+  };
+  var i=0;
+  for (; i<players.length; ++i) {
+    if (players[i].clientId == -1) {
+      players[i].clientId = client.sessionId;
+      players[i].setSnake();
+      break;
+    }
+  }
+  snakes[client.sessionId] = players[i].snake;
+  console.log(client.sessionId + '\'s snake entered the world. Diablo\'s minions grow stronger.');
   //printWorld();
 
   client.send({ snakes: snakes, sessionId: client.sessionId });
-  client.broadcast({ newsnake: newsnake });
+  client.broadcast({ newsnake: players[i].snake });
 
   client.on('message', function(message) {
     // Process move made on the client side and send back result.
@@ -241,14 +258,7 @@ io.on('connection', function(client) {
 
   client.on('disconnect', function(message) {
     deleteSnake(client.sessionId);
-    console.log(client.sessionId + '\'s snake left the world.');
+    console.log(client.sessionId + '\'s snake left the world. Diablo\'s minions grow weaker.');
   });
 
-  deleteSnake = function(id) {
-    snake = snakes[client.sessionId];
-    snake.destroy();
-    // Remove snake from snakes array.
-    delete snakes[id];
-    io.broadcast({ 'disconnect': id });
-  };
 });
