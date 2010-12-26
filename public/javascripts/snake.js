@@ -16,10 +16,16 @@ Snake = function(/*optional*/snake) {
    * 1) Add new body part adjacent to head.
    * 2) Remove tail body part.
    */
-  this.move = function(x, y) {
-    var oldtail = this.body.pop();
-    var newhead = { x: x, y:y };
+  this.move = function(x, y, grow) {
+    console.log('body size before: ' + this.body.length);
+    var oldtail = null,
+        newhead = { x: x, y:y };
     this.body.unshift(newhead);
+    if (typeof(grow) === 'undefined' || !grow) {
+      console.log('removing tail');
+      oldtail = this.body.pop();
+    }
+    console.log('body size after : ' + this.body.length);
     return { newhead: newhead, oldtail: oldtail };
   };
 };

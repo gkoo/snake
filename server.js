@@ -74,6 +74,7 @@ var io = io.listen(app);
 /* @head: head coordinates*/
 /* @tail: tail coordinates*/
 var snakes = {},
+    apple = null,
     /* Starting corner positions */
     upLtCornerPos = [ { x: SNAKESIZE-1, y: 0 }, { x: 0, y: 0 } ],
     upRtCornerPos = [ { x: DIMSIZE-1, y: SNAKESIZE-1 }, { x: DIMSIZE-1, y: 0 } ],
@@ -149,7 +150,7 @@ var getNextPos = function(snake, dx, dy) {
 // on the board.
 var checkBounds = function(x, y) {
   var inbounds = (x >= 0 && x < DIMSIZE) && (y >= 0 && y < DIMSIZE);
-  inbounds = inbounds && (myBoard.getCell(x, y) == myBoard.CELL_EMPTY);
+  inbounds = inbounds && (myBoard.getCell(x, y) != myBoard.CELL_SNAKE);
   //printWorld();
   return inbounds;
 };
@@ -158,6 +159,14 @@ var checkBounds = function(x, y) {
 var printPlayerIds = function() {
   for (var i=0; i<NUMPLAYERS; ++i) {
     console.log(players[i].clientId);
+  }
+};
+var printSnakes = function() {
+  for (var id in snakes) {
+    var body = snakes[id].body;
+    for (var i = 0; i<body.length; ++i) {
+      console.log('Snake id ' + id + ': ' + body[i].x + ', ' + body[i].y);
+    }
   }
 };
 
@@ -207,11 +216,11 @@ io.on('connection', function(client) {
     snakes[client.sessionId] = players[i].snake;
     console.log(client.sessionId + '\'s snake entered the world. Diablo\'s minions grow stronger.');
 
-    client.send({ snakes: snakes, sessionId: client.sessionId });
+    client.send({ snakes: snakes, apple: apple, sessionId: client.sessionId });
     client.broadcast({ newsnake: players[i].snake });
   }
   else {
-    client.send({ snakes: snakes });
+    client.send({ snakes: snakes, apple: apple });
   }
 
   client.on('message', function(message) {
@@ -221,22 +230,29 @@ io.on('connection', function(client) {
         var mysnake = snakes[client.sessionId];
         var nextPos = getNextPos(mysnake, message.dx, message.dy);
         if (checkBounds(nextPos.x, nextPos.y)) {
-          var changedCoords = mysnake.move(nextPos.x, nextPos.y),
+          // Check if we got an apple
+          var nextCellContents = myBoard.getCell(nextPos.x, nextPos.y),
+              grow = nextCellContents === myBoard.CELL_APPLE,
+              changedCoords = mysnake.move(nextPos.x, nextPos.y, grow),
               oldtail = changedCoords.oldtail,
               newhead = changedCoords.newhead;
-          myBoard.setEmptyCell(oldtail.x, oldtail.y);
+
+          // Want to remove the tail.
+          if (oldtail) {
+            myBoard.setEmptyCell(oldtail.x, oldtail.y);
+          }
           myBoard.setSnakeCell(newhead.x, newhead.y);
 
-          messageObj = { type: 'serverMove', sessionId: client.sessionId, x: nextPos.x, y: nextPos.y };
+          messageObj = { type: 'serverMove', sessionId: client.sessionId, x: nextPos.x, y: nextPos.y, grow: grow };
           io.broadcast(messageObj);
           //console.log(client.sessionId + ' moved to {' + nextPos.x + ', ' + nextPos.y + '}');
-          //printWorld();
+          //myBoard.printWorld();
         }
         break;
       case 'apple':
-        var appleCoord = myBoard.setAppleCell(true);
-        io.broadcast({ apple: appleCoord });
-        console.log('broadcasted coordinates: ' + appleCoord.x + ', ' + appleCoord.y);
+        apple = myBoard.setAppleCell(true);
+        io.broadcast({ apple: apple });
+        console.log('broadcasted coordinates: ' + apple.x + ', ' + apple.y);
         break;
       default:
         // do error handling?

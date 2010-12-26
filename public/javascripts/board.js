@@ -65,6 +65,7 @@ Board = function(dimsize) {
     delete snake;
   };
   this.addApple = function(x, y) {
+    this.setAppleCell(false, x, y);
     this.redrawCoord(x, y, appleColor);
   };
   this.setSnakeCell = function (x, y) {
@@ -95,6 +96,7 @@ Board = function(dimsize) {
       }
       console.log(str);
     }
+    console.log('');
   };
   /*
    * Function: getRandomCoord

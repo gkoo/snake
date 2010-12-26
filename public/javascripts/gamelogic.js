@@ -40,15 +40,18 @@ socket.on('message', function(obj){
   }
   else if ('type' in obj && obj.type == 'serverMove') {
     var snake = myBoard.getSnakeById(obj.sessionId);
-    var updateCoords = snake.move(obj.x, obj.y);
+    var updateCoords = snake.move(obj.x, obj.y, obj.grow);
 
     var oldtail = updateCoords.oldtail;
     var newhead = updateCoords.newhead;
 
-    myBoard.setEmptyCell(oldtail.x, oldtail.y);
-    myBoard.setSnakeCell(newhead.x, newhead.y);
+    // oldtail is null if snake just ate the apple.
+    if (oldtail) {
+      myBoard.setEmptyCell(oldtail.x, oldtail.y);
+      myBoard.redrawCoord(oldtail.x, oldtail.y, snake.color);
+    }
 
-    myBoard.redrawCoord(oldtail.x, oldtail.y, snake.color);
+    myBoard.setSnakeCell(newhead.x, newhead.y);
     myBoard.redrawCoord(newhead.x, newhead.y, snake.color);
   }
   else if ('disconnect' in obj) {
@@ -66,5 +69,4 @@ socket.on('message', function(obj){
 
 $('#applebtn').click(function(e) {
   socket.send({ type : 'apple' });
-  //myBoard.addApple();
 });
