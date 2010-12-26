@@ -1,5 +1,0 @@
-World = function() {
-  this.worldGrid = [];
-
-
-};

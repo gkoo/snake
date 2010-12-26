@@ -1,11 +1,13 @@
 Board.prototype.worldElem = $('#world');
 Board.prototype.getCellElem = function(x, y) {
   // get row
-  var y = y+1, x = x+1; // nth-child works on 1-based values;
-  var row = this.worldElem.children('li:nth-child(' + y + ')');
-  var col = row.find('li:nth-child(' + x + ')');
+  var y = y+1, x = x+1, // nth-child works on 1-based values;
+      row = this.worldElem.children('li:nth-child(' + y + ')'),
+      col = row.find('li:nth-child(' + x + ')');
+
   return col;
 };
+Board.prototype.mysnake = null;
 
 // Capture keyboard input.
 $(window).keydown(function(e) {

@@ -1,5 +1,6 @@
-var dimsize = $('#world').children('li').length;
-var myBoard = new Board(dimsize);
+var dimsize = $('#world').children('li').length,
+    myBoard = new Board(dimsize),
+    mySessionId = 0;
 
 
 // SOCKET.IO STUFF
@@ -13,19 +14,21 @@ socket.connect();
 socket.on('message', function(obj){
   // Initialize board.
   if ('snakes' in obj){
-    var mySessionId = 0;
     if ('sessionId' in obj) {
       mySessionId = obj.sessionId;
     }
-    for (var id in obj.snakes) {
-      snake = obj.snakes[id]
-      myBoard.addSnake(new Snake(snake));
+    for (var i=0; i<obj.snakes.length; ++i) {
+      snake = obj.snakes[i];
+      var newsnake = new Snake(snake);
+      myBoard.addSnake(newsnake);
 
       // Set "my" snake.
-      if (snake.id == mySessionId) {
-        myBoard.mysnake = new Snake(obj.snakes[id]);
+      if (i == 0) {
+        myBoard.mysnake = newsnake;
+        console.log(myBoard.mysnake.color);
         $('.yourcolor').css('background-color', myBoard.mysnake.color);
       }
+
     }
     myBoard.redraw();
   }
@@ -33,13 +36,13 @@ socket.on('message', function(obj){
     // a new snake entered the board
     myBoard.addSnake(new Snake(obj.newsnake));
     // use server snake obj to get client snake obj and redraw
-    myBoard.redrawSnakeById(obj.newsnake.id);
+    myBoard.redrawSnakeByPlayerId(obj.newsnake.playerId);
   }
   else if ('apple' in obj) {
     myBoard.addApple(obj.apple.x, obj.apple.y);
   }
   else if ('type' in obj && obj.type == 'serverMove') {
-    var snake = myBoard.getSnakeById(obj.sessionId);
+    var snake = myBoard.getSnakeByPlayerId(obj.playerId);
     var updateCoords = snake.move(obj.x, obj.y, obj.grow);
 
     var oldtail = updateCoords.oldtail;
@@ -54,10 +57,13 @@ socket.on('message', function(obj){
     myBoard.setSnakeCell(newhead.x, newhead.y);
     myBoard.redrawCoord(newhead.x, newhead.y, snake.color);
   }
+  else if ('death' in obj) {
+    myBoard.kill(obj.death);
+  }
   else if ('disconnect' in obj) {
     // remove snake from board.
-    id = obj.disconnect;
-    myBoard.removeSnakeById(id);
+    playerId = obj.disconnect;
+    myBoard.removeSnakeByPlayerId(playerId);
   }
 });
 

@@ -9,7 +9,7 @@ var io = require('socket.io');
 
 var app = module.exports = express.createServer();
 
-var clientlogic = require('./public/javascripts/snake.js');
+var snakelogic = require('./public/javascripts/snake.js');
 
 var boardlogic = require('./public/javascripts/board.js');
 
@@ -87,13 +87,16 @@ var snakes = {},
 
 
 // Add some functions to Snake object
-Snake.prototype.addBodyPart = function(part) {
+
+snakelogic.Snake.prototype.id = -1; // add id here so that client doesn't see it.
+
+snakelogic.Snake.prototype.addBodyPart = function(part) {
   this.body.push(part);
   myBoard.setSnakeCell(part.x, part.y);
 };
 
 // TODO: check that head and tail share either x or y axis. (right now, no checks)
-Snake.prototype.setBody = function(head, tail) {
+snakelogic.Snake.prototype.setBody = function(head, tail) {
   var delta = 1; // direction in which we proceed from head to tail.
   this.addBodyPart(head);
 
@@ -118,7 +121,7 @@ Snake.prototype.setBody = function(head, tail) {
   this.addBodyPart(tail);
 };
 
-Snake.prototype.destroy = function() {
+snakelogic.Snake.prototype.destroy = function() {
   // Remove snake from world grid.
   for (var j=0; j<this.body.length; ++j) {
     var bodyPart = this.body[j];
@@ -129,30 +132,18 @@ Snake.prototype.destroy = function() {
 
 // Init players and world.
 for (var i=0; i<NUMPLAYERS; ++i) {
-  var player = new Player();
+  var player = new playerlogic.Player(i);
   player.color = COLORS[i];
   player.startingPos = startPosArr[i];
   players.push(player);
 }
 
-myBoard = new Board(DIMSIZE);
+myBoard = new boardlogic.Board(DIMSIZE);
 
 var getNextPos = function(snake, dx, dy) {
   var newX = snake.body[0].x + dx;
   var newY = snake.body[0].y + dy;
   return { x: newX, y: newY };
-};
-
-
-// Function: checkBounds
-// ---------------------
-// Returns true if the given coordinates are within bounds and unoccupied
-// on the board.
-var checkBounds = function(x, y) {
-  var inbounds = (x >= 0 && x < DIMSIZE) && (y >= 0 && y < DIMSIZE);
-  inbounds = inbounds && (myBoard.getCell(x, y) != myBoard.CELL_SNAKE);
-  //printWorld();
-  return inbounds;
 };
 
 
@@ -191,7 +182,7 @@ io.on('connection', function(client) {
     player.clientId = -1;
     // Remove snake from snakes array.
     delete snakes[id];
-    io.broadcast({ 'disconnect': id });
+    io.broadcast({ 'disconnect': player.playerId });
   };
 
   var i=0;
@@ -199,11 +190,11 @@ io.on('connection', function(client) {
   // Check for an open slot.
   for (; i<players.length; ++i) {
     if (players[i].clientId == -1) {
-      var player = players[i];
+      var player = players[i],
+          snake = new snakelogic.Snake();
       player.clientId = client.sessionId;
-      player.setSnake();
+      player.initSnake(snake); // give snake startingPos and color.
       console.log('Spot ' + i + ' was open!');
-      printPlayerIds();
       break;
     }
     if (i == players.length-1) {
@@ -213,10 +204,27 @@ io.on('connection', function(client) {
     }
   }
   if (i < players.length) {
+    // We found an open spot.
+    var snakeArr = [];
+
     snakes[client.sessionId] = players[i].snake;
     console.log(client.sessionId + '\'s snake entered the world. Diablo\'s minions grow stronger.');
 
-    client.send({ snakes: snakes, apple: apple, sessionId: client.sessionId });
+    // Construct snakes array to pass to client. We don't send the
+    // snakes object we have because it uses client session id's as
+    // keys, which a malicious user could use to spoof moves.
+    for (var id in snakes) {
+      // Always put client's snake at beginning of array so it
+      // can be identified.
+      if (id == client.sessionId) {
+        snakeArr.unshift(snakes[id]);
+      }
+      else {
+        snakeArr.push(snakes[id]);
+      }
+    }
+
+    client.send({ snakes: snakeArr, apple: apple, sessionId: client.sessionId });
     client.broadcast({ newsnake: players[i].snake });
   }
   else {
@@ -229,7 +237,7 @@ io.on('connection', function(client) {
       case 'clientMove':
         var mysnake = snakes[client.sessionId];
         var nextPos = getNextPos(mysnake, message.dx, message.dy);
-        if (checkBounds(nextPos.x, nextPos.y)) {
+        if (myBoard.checkBounds(nextPos.x, nextPos.y)) {
           // Check if we got an apple
           var nextCellContents = myBoard.getCell(nextPos.x, nextPos.y),
               grow = nextCellContents === myBoard.CELL_APPLE,
@@ -243,10 +251,14 @@ io.on('connection', function(client) {
           }
           myBoard.setSnakeCell(newhead.x, newhead.y);
 
-          messageObj = { type: 'serverMove', sessionId: client.sessionId, x: nextPos.x, y: nextPos.y, grow: grow };
+          messageObj = { type: 'serverMove', playerId: mysnake.playerId, x: nextPos.x, y: nextPos.y, grow: grow };
+
           io.broadcast(messageObj);
           //console.log(client.sessionId + ' moved to {' + nextPos.x + ', ' + nextPos.y + '}');
           //myBoard.printWorld();
+        }
+        else {
+          io.broadcast({ death: client.sessionId });
         }
         break;
       case 'apple':

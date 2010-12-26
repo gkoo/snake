@@ -1,4 +1,4 @@
-Board = function(dimsize) {
+var Board = function(dimsize) {
   /* Private vars */
   //var myPerson = new Person(),
   this.CELL_EMPTY = 0;
@@ -42,20 +42,20 @@ Board = function(dimsize) {
     }
   };
   this.addSnake = function(snake) {
-    snakes[snake.id] = snake;
+    snakes[snake.playerId] = snake;
   };
-  this.redrawSnakeById = function(id) {
-    var snake = this.getSnakeById(id);
+  this.redrawSnakeByPlayerId = function(playerId) {
+    var snake = this.getSnakeByPlayerId(playerId);
     for (var i=0; i<snake.body.length; ++i) {
       var cell = myBoard.getCellElem(snake.body[i].x, snake.body[i].y);
       toggleCell(cell, true, snake.color);
     }
   };
-  this.getSnakeById = function(id) {
+  this.getSnakeByPlayerId = function(id) {
     return snakes[id];
   };
-  this.removeSnakeById = function(id) {
-    var snake = snakes[id];
+  this.removeSnakeByPlayerId = function(playerId) {
+    var snake = snakes[playerId];
     for (var i=0; i<snake.body.length; ++i) {
       var bodyPart = snake.body[i];
       worldGrid[bodyPart.x][bodyPart.y] = 0;
@@ -67,6 +67,9 @@ Board = function(dimsize) {
   this.addApple = function(x, y) {
     this.setAppleCell(false, x, y);
     this.redrawCoord(x, y, appleColor);
+  };
+  this.kill = function(playerId) {
+    alert('you died');
   };
   this.setSnakeCell = function (x, y) {
     worldGrid[x][y] = this.CELL_SNAKE;
@@ -86,6 +89,11 @@ Board = function(dimsize) {
   this.getCell = function (x, y) {
     return worldGrid[x][y];
   };
+  this.checkBounds = function(x, y) {
+    var inbounds = (x >= 0 && x < dimsize) && (y >= 0 && y < dimsize);
+    inbounds = inbounds && (worldGrid[x][y] != this.CELL_SNAKE);
+    return inbounds;
+  }
   // FOR DEBUG PURPOSES
   this.printWorld = function() {
     var str = '';
@@ -121,11 +129,6 @@ Board = function(dimsize) {
     }
   }
 
-  var checkBounds = function(x, y) {
-    var inbounds = (x >= 0 && x < that.dimsize) && (y >= 0 && y < that.dimsize);
-    inbounds = inbounds && (worldGrid[x][y] == 0);
-    return inbounds;
-  }
   var toggleCell = function(cell, state, color) {
     if (state) {
       cell.css('background-color', color);
@@ -135,3 +138,7 @@ Board = function(dimsize) {
     }
   }
 };
+
+if (typeof(exports) !== 'undefined') {
+  exports.Board = Board;
+}

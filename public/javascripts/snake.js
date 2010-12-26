@@ -1,13 +1,13 @@
-Snake = function(/*optional*/snake) {
+var Snake = function(/*optional*/snake) {
   if (snake) {
     this.body = snake.body;
-    this.id = snake.id;
     this.color = snake.color;
+    this.playerId = snake.playerId;
   }
   else {
     this.body = []; // array of coordinate objects
-    this.id = -1;
     this.color = '#000'; // default black snake.
+    this.playerId = null;
   }
 
   /*
@@ -17,15 +17,16 @@ Snake = function(/*optional*/snake) {
    * 2) Remove tail body part.
    */
   this.move = function(x, y, grow) {
-    console.log('body size before: ' + this.body.length);
     var oldtail = null,
         newhead = { x: x, y:y };
     this.body.unshift(newhead);
     if (typeof(grow) === 'undefined' || !grow) {
-      console.log('removing tail');
       oldtail = this.body.pop();
     }
-    console.log('body size after : ' + this.body.length);
     return { newhead: newhead, oldtail: oldtail };
   };
 };
+
+if (typeof(exports) !== 'undefined') {
+  exports.Snake = Snake;
+}

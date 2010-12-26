@@ -1,12 +1,14 @@
-Player = function() {
+var Player = function(id) {
   // default values
   this.clientId = -1;
+  this.playerId = id;
   this.startingPos = null;
   this.snake = null;
 
-  this.setSnake = function() {
-    this.snake = new Snake();
-    this.snake.id = this.clientId;
+  this.initSnake = function(snake) {
+    this.snake = snake;
+    this.snake.id = this.clientId; // visible only to server
+    this.snake.playerId = this.playerId;
     if (this.color) {
       this.snake.color = this.color;
     }
@@ -43,3 +45,5 @@ Player = function() {
     }
   }
 }
+
+exports.Player = Player;
