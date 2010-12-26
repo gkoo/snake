@@ -11,7 +11,7 @@ var app = module.exports = express.createServer();
 
 var clientlogic = require('./public/javascripts/snake.js');
 
-var worldlogic = require('./world.js');
+var boardlogic = require('./public/javascripts/board.js');
 
 var playerlogic = require('./player.js');
 
@@ -38,7 +38,7 @@ app.configure('production', function(){
 DIMSIZE     = 10, // dimension size for game board
 SNAKESIZE   = 3,
 NUMPLAYERS  = 4,
-COLORS      = ['#f00', '#0d0', '#00f', '#0dd'];
+COLORS      = ['#f00', '#030', '#00f', '#0dd'];
 
 // Routes
 
@@ -81,14 +81,14 @@ var snakes = {},
     downLtCornerPos = [ { x: 0, y: DIMSIZE-SNAKESIZE }, { x: 0, y: DIMSIZE-1 } ],
     startPosArr = [upLtCornerPos, downRtCornerPos, upRtCornerPos, downLtCornerPos],
     players = [],
-    myWorld = null;
+    myBoard = null;
 
 
 
 // Add some functions to Snake object
 Snake.prototype.addBodyPart = function(part) {
   this.body.push(part);
-  myWorld.setSnakeCell(part.x, part.y);
+  myBoard.setSnakeCell(part.x, part.y);
 };
 
 // TODO: check that head and tail share either x or y axis. (right now, no checks)
@@ -121,7 +121,7 @@ Snake.prototype.destroy = function() {
   // Remove snake from world grid.
   for (var j=0; j<this.body.length; ++j) {
     var bodyPart = this.body[j];
-    myWorld.setEmptyCell(bodyPart.x, bodyPart.y);
+    myBoard.setEmptyCell(bodyPart.x, bodyPart.y);
   }
 };
 
@@ -134,7 +134,7 @@ for (var i=0; i<NUMPLAYERS; ++i) {
   players.push(player);
 }
 
-myWorld = new World();
+myBoard = new Board(DIMSIZE);
 
 var getNextPos = function(snake, dx, dy) {
   var newX = snake.body[0].x + dx;
@@ -149,23 +149,12 @@ var getNextPos = function(snake, dx, dy) {
 // on the board.
 var checkBounds = function(x, y) {
   var inbounds = (x >= 0 && x < DIMSIZE) && (y >= 0 && y < DIMSIZE);
-  inbounds = inbounds && (myWorld.getCell(x, y) == myWorld.CELL_EMPTY);
-  printWorld();
+  inbounds = inbounds && (myBoard.getCell(x, y) == myBoard.CELL_EMPTY);
+  //printWorld();
   return inbounds;
 };
 
 
-// FOR DEBUG PURPOSES
-printWorld = function() {
-  var str = '';
-  for (var i=0; i<DIMSIZE; ++i) {
-    str = '';
-    for (var j=0; j<DIMSIZE; ++j) {
-      str += myWorld.getCell(j, i);
-    }
-    console.log(str);
-  }
-};
 var printPlayerIds = function() {
   for (var i=0; i<NUMPLAYERS; ++i) {
     console.log(players[i].clientId);
@@ -235,8 +224,8 @@ io.on('connection', function(client) {
           var changedCoords = mysnake.move(nextPos.x, nextPos.y),
               oldtail = changedCoords.oldtail,
               newhead = changedCoords.newhead;
-          myWorld.setEmptyCell(oldtail.x, oldtail.y);
-          myWorld.setSnakeCell(newhead.x, newhead.y);
+          myBoard.setEmptyCell(oldtail.x, oldtail.y);
+          myBoard.setSnakeCell(newhead.x, newhead.y);
 
           messageObj = { type: 'serverMove', sessionId: client.sessionId, x: nextPos.x, y: nextPos.y };
           io.broadcast(messageObj);
@@ -245,6 +234,9 @@ io.on('connection', function(client) {
         }
         break;
       case 'apple':
+        var appleCoord = myBoard.setAppleCell(true);
+        io.broadcast({ apple: appleCoord });
+        console.log('broadcasted coordinates: ' + appleCoord.x + ', ' + appleCoord.y);
         break;
       default:
         // do error handling?
@@ -255,5 +247,4 @@ io.on('connection', function(client) {
     deletePlayer(client.sessionId);
     console.log(client.sessionId + '\'s snake left the world. Diablo\'s minions grow weaker.');
   });
-
 });

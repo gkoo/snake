@@ -1,4 +1,5 @@
-var myBoard = new Board();
+var dimsize = $('#world').children('li').length;
+var myBoard = new Board(dimsize);
 
 
 // SOCKET.IO STUFF
@@ -34,6 +35,9 @@ socket.on('message', function(obj){
     // use server snake obj to get client snake obj and redraw
     myBoard.redrawSnakeById(obj.newsnake.id);
   }
+  else if ('apple' in obj) {
+    myBoard.addApple(obj.apple.x, obj.apple.y);
+  }
   else if ('type' in obj && obj.type == 'serverMove') {
     var snake = myBoard.getSnakeById(obj.sessionId);
     var updateCoords = snake.move(obj.x, obj.y);
@@ -41,8 +45,8 @@ socket.on('message', function(obj){
     var oldtail = updateCoords.oldtail;
     var newhead = updateCoords.newhead;
 
-    worldGrid[oldtail.x][oldtail.y] = 0;
-    worldGrid[newhead.x][newhead.y] = obj.sessionId;
+    myBoard.setEmptyCell(oldtail.x, oldtail.y);
+    myBoard.setSnakeCell(newhead.x, newhead.y);
 
     myBoard.redrawCoord(oldtail.x, oldtail.y, snake.color);
     myBoard.redrawCoord(newhead.x, newhead.y, snake.color);

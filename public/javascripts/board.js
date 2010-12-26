@@ -1,9 +1,12 @@
-var Board = function() {
+Board = function(dimsize) {
   /* Private vars */
   //var myPerson = new Person(),
+  this.CELL_EMPTY = 0;
+  this.CELL_SNAKE = 1;
+  this.CELL_APPLE = 2;
   var that = this,
-      worldElem = $('#world');
       worldGrid = [],
+      appleColor = '#0d0';
       codeW = 87,
       codeA = 65,
       codeS = 83,
@@ -17,7 +20,6 @@ var Board = function() {
       apple = null;
 
   /* Public vars and methods */
-  this.width = this.height = worldElem.children('li').length;
   this.getGrid = function() { return worldGrid; };
   this.redraw = function(rows) {
     // Assume empty board when this function is called.
@@ -25,13 +27,13 @@ var Board = function() {
       var body = snakes[id].body;
       for (var j=0; j<body.length; ++j) {
         var bodyPart = body[j];
-        var coord = this.getWorldCell(bodyPart.x, bodyPart.y);
+        var coord = this.getCellElem(bodyPart.x, bodyPart.y);
         toggleCell(coord, true, snakes[id].color);
       }
     }
   };
   this.redrawCoord = function(x, y, color) {
-    var cell = this.getWorldCell(x, y);
+    var cell = this.getCellElem(x, y);
     if (worldGrid[x][y] == 0) {
       toggleCell(cell, false);
     }
@@ -39,20 +41,13 @@ var Board = function() {
       toggleCell(cell, true, color);
     }
   };
-  this.getWorldCell = function(x, y) {
-    // get row
-    var y = y+1, x = x+1; // nth-child works on 1-based values;
-    var row = worldElem.children('li:nth-child(' + y + ')');
-    var col = row.find('li:nth-child(' + x + ')');
-    return col;
-  };
   this.addSnake = function(snake) {
     snakes[snake.id] = snake;
   };
   this.redrawSnakeById = function(id) {
     var snake = this.getSnakeById(id);
     for (var i=0; i<snake.body.length; ++i) {
-      var cell = myBoard.getWorldCell(snake.body[i].x, snake.body[i].y);
+      var cell = myBoard.getCellElem(snake.body[i].x, snake.body[i].y);
       toggleCell(cell, true, snake.color);
     }
   };
@@ -64,10 +59,42 @@ var Board = function() {
     for (var i=0; i<snake.body.length; ++i) {
       var bodyPart = snake.body[i];
       worldGrid[bodyPart.x][bodyPart.y] = 0;
-      var cell = this.getWorldCell(bodyPart.x, bodyPart.y);
+      var cell = this.getCellElem(bodyPart.x, bodyPart.y);
       toggleCell(cell, false);
     }
     delete snake;
+  };
+  this.addApple = function(x, y) {
+    this.redrawCoord(x, y, appleColor);
+  };
+  this.setSnakeCell = function (x, y) {
+    worldGrid[x][y] = this.CELL_SNAKE;
+  };
+  this.setEmptyCell = function (x, y) {
+    worldGrid[x][y] = this.CELL_EMPTY;
+  };
+  this.setAppleCell = function (random, x, y) {
+    if (random) {
+      var randomCoord = this.getRandomCoord();
+      x = randomCoord.x;
+      y = randomCoord.y;
+    }
+    worldGrid[x][y] = this.CELL_APPLE;
+    return randomCoord;
+  };
+  this.getCell = function (x, y) {
+    return worldGrid[x][y];
+  };
+  // FOR DEBUG PURPOSES
+  this.printWorld = function() {
+    var str = '';
+    for (var i=0; i<dimsize; ++i) {
+      str = '';
+      for (var j=0; j<dimsize; ++j) {
+        str += this.getCell(j, i);
+      }
+      console.log(str);
+    }
   };
   /*
    * Function: getRandomCoord
@@ -76,71 +103,24 @@ var Board = function() {
    */
   this.getRandomCoord = function() {
     while (true) {
-      var randRow = Math.floor(Math.random()*DIMSIZE);
-      var randCol = Math.floor(Math.random()*DIMSIZE);
-      if (worldGrid[randRow][randCol] == 0) {
+      var randRow = Math.floor(Math.random()*dimsize);
+      var randCol = Math.floor(Math.random()*dimsize);
+      if (worldGrid[randRow][randCol] == this.CELL_EMPTY) {
         return { x: randRow, y: randCol };
       }
     }
   };
-  this.addApple = function() {
-    var randCoord = getRandomCoord();
-  };
 
-  for (var i=0; i<this.width; ++i) {
+  // Init.
+  for (var i=0; i<dimsize; ++i) {
     worldGrid[i] = [];
-    for (var j=0; j<this.height; ++j) {
-      worldGrid[i][j] = 0;
+    for (var j=0; j<dimsize; ++j) {
+      worldGrid[i][j] = this.CELL_EMPTY;
     }
   }
 
-  // Capture keyboard input.
-  $(window).keydown(function(e) {
-    var dx = 0;
-    var dy = 0;
-    switch(e.keyCode) {
-      case codeW:
-      case codeUp:
-      case codeSpace:
-        dy = -1;
-        break;
-      case codeA:
-      case codeLeft:
-        dx = -1;
-        break;
-      case codeS:
-      case codeDown:
-        dy = 1;
-        break;
-      case codeD:
-      case codeRight:
-        dx = 1;
-        break;
-      default:
-        return;
-    }
-    messageObj = { type: 'clientMove', dx: dx, dy: dy };
-    socket.send(messageObj);
-    /*
-    if (checkBounds(nextPos.x, nextPos.y)) {
-      var updateCoords = that.mysnake.move(dx,dy);
-
-      var oldtail = updateCoords.oldtail;
-      var newhead = updateCoords.newhead;
-
-      worldGrid[oldtail.x][oldtail.y] = 0;
-      worldGrid[newhead.x][newhead.y] = that.mysnake.id;
-
-      redrawCoord(oldtail.x, oldtail.y);
-      redrawCoord(newhead.x, newhead.y);
-    }
-    */
-    e.stopPropagation();
-    return false;
-  });
-
   var checkBounds = function(x, y) {
-    var inbounds = (x >= 0 && x < that.width) && (y >= 0 && y < that.height);
+    var inbounds = (x >= 0 && x < that.dimsize) && (y >= 0 && y < that.dimsize);
     inbounds = inbounds && (worldGrid[x][y] == 0);
     return inbounds;
   }
