@@ -9,6 +9,12 @@ var io = require('socket.io');
 
 var app = module.exports = express.createServer();
 
+var clientlogic = require('./public/javascripts/snake.js');
+
+var worldlogic = require('./world.js');
+
+var playerlogic = require('./player.js');
+
 // Configuration
 
 app.configure(function(){
@@ -21,14 +27,18 @@ app.configure(function(){
 });
 
 app.configure('development', function(){
-  app.use(express.errorHandler({ dumpExceptions: true, showStack: true })); 
+  app.use(express.errorHandler({ dumpExceptions: true, showStack: true }));
 });
 
 app.configure('production', function(){
-  app.use(express.errorHandler()); 
+  app.use(express.errorHandler());
 });
 
-dimSize = 10; // dimension size for game board
+// CONSTANTS
+DIMSIZE     = 10, // dimension size for game board
+SNAKESIZE   = 3,
+NUMPLAYERS  = 4,
+COLORS      = ['#f00', '#0d0', '#00f', '#0dd'];
 
 // Routes
 
@@ -36,7 +46,7 @@ app.get('/', function(req, res){
   res.render('index', {
     locals: {
       title: 'Snake',
-      dimSize: dimSize
+      dimSize: DIMSIZE
     }
   });
 });
@@ -50,214 +60,199 @@ if (!module.parent) {
 
 var io = io.listen(app);
 
+
+
+
+
+
+
+
 // ----------
 // GAME LOGIC
 // ----------
 
 /* @head: head coordinates*/
 /* @tail: tail coordinates*/
-var Snake = function() {
-  this.body = []; // array of coordinate objects
-  this.id = -1;
-  this.color = '#000'; // default black snake.
-  this.addBodyPart = function(part) {
-    this.body.push(part);
-    worldGrid[part.x][part.y] = this.id;
-  };
-  this.move = function(x, y) {
-    var oldtail = this.body.pop();
-    var newhead = { x: x, y:y };
-    this.body.unshift(newhead);
-
-    worldGrid[oldtail.x][oldtail.y] = 0;
-    worldGrid[newhead.x][newhead.y] = this.id;
-    return { newhead: newhead, oldtail: oldtail };
-  };
-  // TODO: check that head and tail share either x or y axis. (right now, no checks)
-  this.setBody = function(head, tail) {
-    var delta = 1; // direction in which we proceed from head to tail.
-    this.addBodyPart(head);
-
-    // Same x, fill in with y values
-    if (head.x == tail.x) {
-      if (head.y > tail.y) {
-        delta = -1;
-      }
-      for (var i=head.y+delta; i != tail.y; i+= delta) {
-        this.addBodyPart({ x: head.x, y: i });
-      }
-    }
-    // Same y, fill in with x values
-    else if (head.y == tail.y) {
-      if (head.x > tail.x) {
-        delta = -1;
-      }
-      for (var i=head.x+delta; i != tail.x; i+= delta) {
-        this.addBodyPart({ x: i, y: head.y });
-      }
-    }
-    this.addBodyPart(tail);
-  }
-  this.destroy = function() {
-    // Remove snake from world grid.
-    for (var j=0; j<this.body.length; ++j) {
-      var bodyPart = this.body[j];
-      worldGrid[bodyPart.x][bodyPart.y] = 0;
-    }
-  }
-}
-
-var Player = function() {
-  // default values
-  this.clientId = -1;
-  this.startingPos = null;
-  this.snake = null;
-
-  this.setSnake = function() {
-    this.snake = new Snake();
-    this.snake.id = this.clientId;
-    if (this.color) {
-      this.snake.color = this.color;
-    }
-    if (this.startingPos) {
-      console.log('setting start position');
-      this.snake.setBody(this.startingPos[0], this.startingPos[1]);
-    }
-    else {
-      console.log('didn not set');
-    }
-  };
-
-  this.getRandStartPos = function() {
-    var found = false;
-    while (true) {
-      var randRow = Math.floor(Math.random()*dimSize);
-      var randCol = Math.floor(Math.random()*(dimSize-2));
-      for (var i=randCol; i<randCol+3; ++i) {
-        console.log('Trying {' + randRow + ', ' + i + '}');
-        if (!checkBounds(randRow, i)) { break; }
-        if (worldGrid[randRow][i] != 0) {
-          break;
-        }
-        // last iteration
-        if (i == randCol + 2) {
-          head = { x: randCol, y: randRow };
-          mid = { x: randCol+1, y: randRow };
-          tail = { x: randCol+2, y: randRow };
-          this.startingPos = [ head, mid, tail];
-          found = true;
-        }
-      }
-      if (found) break;
-    }
-  }
-}
-
 var snakes = {},
-    worldGrid = [],
-    colors = ['#f00', '#0d0', '#00f', '#0dd'],
     /* Starting corner positions */
-    upLtCornerPos = [ { x: 2, y: 0 }, { x: 0, y: 0 } ],
-    upRtCornerPos = [ { x: dimSize-1, y: 0 }, { x: dimSize-1, y: 2 } ],
-    downRtCornerPos = [ { x: dimSize-3, y: dimSize-1 }, { x: dimSize-1, y: dimSize-1 } ],
-    downLtCornerPos = [ { x: 2, y: 0 }, { x: 0, y: 0 } ],
+    upLtCornerPos = [ { x: SNAKESIZE-1, y: 0 }, { x: 0, y: 0 } ],
+    upRtCornerPos = [ { x: DIMSIZE-1, y: SNAKESIZE-1 }, { x: DIMSIZE-1, y: 0 } ],
+    downRtCornerPos = [ { x: DIMSIZE-SNAKESIZE, y: DIMSIZE-1 }, { x: DIMSIZE-1, y: DIMSIZE-1 } ],
+    downLtCornerPos = [ { x: 0, y: DIMSIZE-SNAKESIZE }, { x: 0, y: DIMSIZE-1 } ],
     startPosArr = [upLtCornerPos, downRtCornerPos, upRtCornerPos, downLtCornerPos],
-    players = [];
-    numPlayers = 4,
+    players = [],
+    myWorld = null;
 
-// Init players.
-(function () {
-  for (var i=0; i<numPlayers; ++i) {
-    var player = new Player();
-    player.color = colors[i];
-    player.startingPos = startPosArr[i];
-    players.push(player);
-  }
-})();
 
-for (var i=0; i<dimSize; ++i) {
-  worldGrid[i] = [];
-  for (var j=0; j<dimSize; ++j) {
-    worldGrid[i][j] = 0;
+
+// Add some functions to Snake object
+Snake.prototype.addBodyPart = function(part) {
+  this.body.push(part);
+  myWorld.setSnakeCell(part.x, part.y);
+};
+
+// TODO: check that head and tail share either x or y axis. (right now, no checks)
+Snake.prototype.setBody = function(head, tail) {
+  var delta = 1; // direction in which we proceed from head to tail.
+  this.addBodyPart(head);
+
+  // Same x, fill in with y values
+  if (head.x == tail.x) {
+    if (head.y > tail.y) {
+      delta = -1;
+    }
+    for (var i=head.y+delta; i != tail.y; i+= delta) {
+      this.addBodyPart({ x: head.x, y: i });
+    }
   }
+  // Same y, fill in with x values
+  else if (head.y == tail.y) {
+    if (head.x > tail.x) {
+      delta = -1;
+    }
+    for (var i=head.x+delta; i != tail.x; i+= delta) {
+      this.addBodyPart({ x: i, y: head.y });
+    }
+  }
+  this.addBodyPart(tail);
+};
+
+Snake.prototype.destroy = function() {
+  // Remove snake from world grid.
+  for (var j=0; j<this.body.length; ++j) {
+    var bodyPart = this.body[j];
+    myWorld.setEmptyCell(bodyPart.x, bodyPart.y);
+  }
+};
+
+
+// Init players and world.
+for (var i=0; i<NUMPLAYERS; ++i) {
+  var player = new Player();
+  player.color = COLORS[i];
+  player.startingPos = startPosArr[i];
+  players.push(player);
 }
+
+myWorld = new World();
+
 var getNextPos = function(snake, dx, dy) {
   var newX = snake.body[0].x + dx;
   var newY = snake.body[0].y + dy;
   return { x: newX, y: newY };
 };
+
+
+// Function: checkBounds
+// ---------------------
+// Returns true if the given coordinates are within bounds and unoccupied
+// on the board.
 var checkBounds = function(x, y) {
-  var inbounds = (x >= 0 && x < dimSize) && (y >= 0 && y < dimSize);
-  inbounds = inbounds && (worldGrid[x][y] == 0);
+  var inbounds = (x >= 0 && x < DIMSIZE) && (y >= 0 && y < DIMSIZE);
+  inbounds = inbounds && (myWorld.getCell(x, y) == myWorld.CELL_EMPTY);
+  printWorld();
   return inbounds;
 };
+
+
 // FOR DEBUG PURPOSES
-var printWorld = function() {
-  var str;
-  for (var i=0; i<dimSize; ++i) {
+printWorld = function() {
+  var str = '';
+  for (var i=0; i<DIMSIZE; ++i) {
     str = '';
-    for (var j=0; j<dimSize; ++j) {
-      if (worldGrid[j][i] == 0) {
-        str += '0';
-      }
-      else {
-        str += '1';
-      }
+    for (var j=0; j<DIMSIZE; ++j) {
+      str += myWorld.getCell(j, i);
     }
     console.log(str);
   }
 };
-var getPlayerById = function(id) {
-  for (var i=0; i<players.length; ++i) {
-    if (players[i].clientId == id) {
-      return players[i];
-    }
+var printPlayerIds = function() {
+  for (var i=0; i<NUMPLAYERS; ++i) {
+    console.log(players[i].clientId);
   }
-}
+};
+
+
+
+
+
+// SOCKET.IO STUFF
+// ---------------
 
 io.on('connection', function(client) {
-  // Store a new snake specific to client's sessionId.
-  var deleteSnake = function(id) {
-    var player = getPlayerById(id);
-    snake = player.snake;
+  var deletePlayer = function(id) {
+    var player = null;
+    for (var i=0; i<players.length; ++i) {
+      if (players[i].clientId == id) {
+        player = players[i];
+        break;
+      }
+    }
+    var snake = player.snake;
     snake.destroy();
-    player.id = -1;
+    player.clientId = -1;
     // Remove snake from snakes array.
     delete snakes[id];
     io.broadcast({ 'disconnect': id });
   };
+
   var i=0;
+
+  // Check for an open slot.
   for (; i<players.length; ++i) {
     if (players[i].clientId == -1) {
-      players[i].clientId = client.sessionId;
-      players[i].setSnake();
+      var player = players[i];
+      player.clientId = client.sessionId;
+      player.setSnake();
+      console.log('Spot ' + i + ' was open!');
+      printPlayerIds();
       break;
     }
+    if (i == players.length-1) {
+      // should not get here.
+      console.log('Nothing was open!');
+      printPlayerIds();
+    }
   }
-  snakes[client.sessionId] = players[i].snake;
-  console.log(client.sessionId + '\'s snake entered the world. Diablo\'s minions grow stronger.');
-  //printWorld();
+  if (i < players.length) {
+    snakes[client.sessionId] = players[i].snake;
+    console.log(client.sessionId + '\'s snake entered the world. Diablo\'s minions grow stronger.');
 
-  client.send({ snakes: snakes, sessionId: client.sessionId });
-  client.broadcast({ newsnake: players[i].snake });
+    client.send({ snakes: snakes, sessionId: client.sessionId });
+    client.broadcast({ newsnake: players[i].snake });
+  }
+  else {
+    client.send({ snakes: snakes });
+  }
 
   client.on('message', function(message) {
     // Process move made on the client side and send back result.
-    if (message.type == 'clientMove') {
-      var mysnake = snakes[client.sessionId];
-      var nextPos = getNextPos(mysnake, message.dx, message.dy);
-      if (checkBounds(nextPos.x, nextPos.y)) {
-        mysnake.move(nextPos.x, nextPos.y);
-        messageObj = { type: 'serverMove', sessionId: client.sessionId, x: nextPos.x, y: nextPos.y };
-        io.broadcast(messageObj);
-        //console.log(client.sessionId + ' moved to {' + nextPos.x + ', ' + nextPos.y + '}');
-        //printWorld();
-      }
+    switch (message.type) {
+      case 'clientMove':
+        var mysnake = snakes[client.sessionId];
+        var nextPos = getNextPos(mysnake, message.dx, message.dy);
+        if (checkBounds(nextPos.x, nextPos.y)) {
+          var changedCoords = mysnake.move(nextPos.x, nextPos.y),
+              oldtail = changedCoords.oldtail,
+              newhead = changedCoords.newhead;
+          myWorld.setEmptyCell(oldtail.x, oldtail.y);
+          myWorld.setSnakeCell(newhead.x, newhead.y);
+
+          messageObj = { type: 'serverMove', sessionId: client.sessionId, x: nextPos.x, y: nextPos.y };
+          io.broadcast(messageObj);
+          //console.log(client.sessionId + ' moved to {' + nextPos.x + ', ' + nextPos.y + '}');
+          //printWorld();
+        }
+        break;
+      case 'apple':
+        break;
+      default:
+        // do error handling?
     }
   });
 
   client.on('disconnect', function(message) {
-    deleteSnake(client.sessionId);
+    deletePlayer(client.sessionId);
     console.log(client.sessionId + '\'s snake left the world. Diablo\'s minions grow weaker.');
   });
 

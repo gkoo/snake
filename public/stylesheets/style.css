@@ -2,6 +2,9 @@ body {
   padding: 50px;
   font: 14px "Lucida Grande", Helvetica, Arial, sans-serif;
 }
+ul {
+  clear: left;
+}
 ul, li {
   list-style: none;
 }
@@ -11,6 +14,14 @@ li ul {
 }
 li li { /* cell */
   border: 1px solid black;
+  float: left;
+  height: 50px;
+  width: 50px;
+}
+p {
+  float: left;
+}
+.yourcolor {
   float: left;
   height: 50px;
   width: 50px;

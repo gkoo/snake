@@ -1,11 +1,16 @@
-input(type='button',value='Players Ready')
+p Your color
+  div.yourcolor &nbsp;
 ul#world
   - for (var i=0; i<dimSize; i++)
     li
       ul
         -for (var j=0; j<dimSize; j++)
           li
+input(type='button',value='Players Ready')
+input#applebtn(type='button',value='Add Apple')
 
 script(src='/javascripts/jquery-1.4.4.min.js')
 script(src='/socket.io/socket.io.js')
+script(src='/javascripts/snake.js')
+script(src='/javascripts/board.js')
 script(src='/javascripts/gamelogic.js')
