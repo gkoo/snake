@@ -35,10 +35,11 @@ app.configure('production', function(){
 });
 
 // CONSTANTS
-DIMSIZE     = 10, // dimension size for game board
-SNAKESIZE   = 3,
-NUMPLAYERS  = 4,
-COLORS      = ['#f00', '#030', '#00f', '#0dd'];
+var DIMSIZE     = 10, // dimension size for game board
+    SNAKESIZE   = 3,
+    NUMPLAYERS  = 4,
+    SPEED       = 1000, // bigger is slower.
+    COLORS      = ['#f00', '#030', '#00f', '#0dd'];
 
 // Routes
 
@@ -75,6 +76,7 @@ var io = io.listen(app);
 /* @tail: tail coordinates*/
 var snakes = {},
     apple = null,
+    appleCountdown,
     /* Starting corner positions */
     upLtCornerPos = [ { x: SNAKESIZE-1, y: 0 }, { x: 0, y: 0 } ],
     upRtCornerPos = [ { x: DIMSIZE-1, y: SNAKESIZE-1 }, { x: DIMSIZE-1, y: 0 } ],
@@ -82,11 +84,17 @@ var snakes = {},
     downLtCornerPos = [ { x: 0, y: DIMSIZE-SNAKESIZE }, { x: 0, y: DIMSIZE-1 } ],
     startPosArr = [upLtCornerPos, downRtCornerPos, upRtCornerPos, downLtCornerPos],
     players = [],
-    myBoard = null;
+    autoMode = true,
+    myBoard = null,
+    moveInterval = null,
+    gameover    = false;
 
 
 
-// Add some functions to Snake object
+/* -----------------------
+ * EXTEND THE SNAKE OBJECT
+ * -----------------------
+ */
 
 snakelogic.Snake.prototype.id = -1; // add id here so that client doesn't see it.
 
@@ -132,21 +140,72 @@ snakelogic.Snake.prototype.destroy = function() {
 
 // Init players and world.
 for (var i=0; i<NUMPLAYERS; ++i) {
-  var player = new playerlogic.Player(i);
+  var player = new playerlogic.Player(i),
+      dx     = 0;
+      dy     = 0;
+
   player.color = COLORS[i];
   player.startingPos = startPosArr[i];
+  switch(i) {
+    case 0:
+      dx = 1;
+      break;
+    case 1:
+      dx = -1;
+      break;
+    case 2:
+      dy = 1;
+      break;
+    case 3:
+      dy = -1;
+      break;
+  }
+  player.startingDx = dx;
+  player.startingDy = dy;
   players.push(player);
 }
 
 myBoard = new boardlogic.Board(DIMSIZE);
 
-var getNextPos = function(snake, dx, dy) {
-  var newX = snake.body[0].x + dx;
-  var newY = snake.body[0].y + dy;
-  return { x: newX, y: newY };
-};
+var moveSnake = function(snake) {
+  var nextPos = myBoard.getNextPos(snake);
+  if (myBoard.checkBounds(nextPos.x, nextPos.y)) {
+    // Check if we got an apple
+    var nextCellContents = myBoard.getCell(nextPos.x, nextPos.y),
+        grow             = nextCellContents === myBoard.CELL_APPLE,
+        changedCoords    = snake.move(nextPos.x, nextPos.y, grow),
+        oldtail          = changedCoords.oldtail,
+        newhead          = changedCoords.newhead;
 
+    // Want to remove the tail.
+    if (oldtail) {
+      myBoard.setEmptyCell(oldtail.x, oldtail.y);
+    }
+    // reset apple.
+    else {
+      apple = null;
+      // wait 2-5 seconds for next apple.
+      appleCountdown = Math.floor(Math.random(4))+2;
+    }
+    myBoard.setSnakeCell(newhead.x, newhead.y);
 
+    return {
+      type: 'serverMove',
+      playerId: snake.playerId,
+      x: nextPos.x,
+      y: nextPos.y,
+      grow: grow
+    };
+
+    //console.log(client.sessionId + ' moved to {' + nextPos.x + ', ' + nextPos.y + '}');
+    //myBoard.printWorld();
+  }
+  else {
+    return null;
+  }
+}
+
+// DEBUG STUFF
 var printPlayerIds = function() {
   for (var i=0; i<NUMPLAYERS; ++i) {
     console.log(players[i].clientId);
@@ -154,6 +213,7 @@ var printPlayerIds = function() {
 };
 var printSnakes = function() {
   for (var id in snakes) {
+    console.log('snake id ' + id);
     var body = snakes[id].body;
     for (var i = 0; i<body.length; ++i) {
       console.log('Snake id ' + id + ': ' + body[i].x + ', ' + body[i].y);
@@ -181,7 +241,7 @@ io.on('connection', function(client) {
     snake.destroy();
     player.clientId = -1;
     // Remove snake from snakes array.
-    delete snakes[id];
+    delete myBoard.snakes[id];
     io.broadcast({ 'disconnect': player.playerId });
   };
 
@@ -192,6 +252,7 @@ io.on('connection', function(client) {
     if (players[i].clientId == -1) {
       var player = players[i],
           snake = new snakelogic.Snake();
+      myBoard.snakes[client.sessionId] = snake;
       player.clientId = client.sessionId;
       player.initSnake(snake); // give snake startingPos and color.
       console.log('Spot ' + i + ' was open!');
@@ -207,20 +268,19 @@ io.on('connection', function(client) {
     // We found an open spot.
     var snakeArr = [];
 
-    snakes[client.sessionId] = players[i].snake;
     console.log(client.sessionId + '\'s snake entered the world. Diablo\'s minions grow stronger.');
 
     // Construct snakes array to pass to client. We don't send the
     // snakes object we have because it uses client session id's as
     // keys, which a malicious user could use to spoof moves.
-    for (var id in snakes) {
+    for (var id in myBoard.snakes) {
       // Always put client's snake at beginning of array so it
       // can be identified.
       if (id == client.sessionId) {
-        snakeArr.unshift(snakes[id]);
+        snakeArr.unshift(myBoard.snakes[id]);
       }
       else {
-        snakeArr.push(snakes[id]);
+        snakeArr.push(myBoard.snakes[id]);
       }
     }
 
@@ -228,43 +288,72 @@ io.on('connection', function(client) {
     client.broadcast({ newsnake: players[i].snake });
   }
   else {
-    client.send({ snakes: snakes, apple: apple });
+    client.send({ snakes: snakeArr, apple: apple });
   }
 
   client.on('message', function(message) {
-    // Process move made on the client side and send back result.
+
+    if (gameover) { return; } // add some kind of Restart Game call.
+
     switch (message.type) {
+      // Process move made on the client side and send back result.
       case 'clientMove':
-        var mysnake = snakes[client.sessionId];
-        var nextPos = getNextPos(mysnake, message.dx, message.dy);
-        if (myBoard.checkBounds(nextPos.x, nextPos.y)) {
-          // Check if we got an apple
-          var nextCellContents = myBoard.getCell(nextPos.x, nextPos.y),
-              grow = nextCellContents === myBoard.CELL_APPLE,
-              changedCoords = mysnake.move(nextPos.x, nextPos.y, grow),
-              oldtail = changedCoords.oldtail,
-              newhead = changedCoords.newhead;
+        var mysnake   = myBoard.snakes[client.sessionId],
+            dx        = message.dx,
+            dy        = message.dy;
 
-          // Want to remove the tail.
-          if (oldtail) {
-            myBoard.setEmptyCell(oldtail.x, oldtail.y);
+        if (autoMode) {
+          if (mysnake.dx == dx * (-1) || mysnake.dy == dy * (-1)) {
+            return;
           }
-          myBoard.setSnakeCell(newhead.x, newhead.y);
-
-          messageObj = { type: 'serverMove', playerId: mysnake.playerId, x: nextPos.x, y: nextPos.y, grow: grow };
-
-          io.broadcast(messageObj);
-          //console.log(client.sessionId + ' moved to {' + nextPos.x + ', ' + nextPos.y + '}');
-          //myBoard.printWorld();
+          mysnake.dx = dx;
+          mysnake.dy = dy;
         }
         else {
-          io.broadcast({ death: client.sessionId });
+          // Manual mode.
+          var msgObj = null;
+          mysnake.dx = dx;
+          mysnake.dy = dy;
+
+          msgObj = moveSnake(mysnake);
+          if (!msgObj) {
+            msgObj = handleDeath(mysnake.playerId);
+          }
+          io.broadcast(msgObj);
         }
         break;
       case 'apple':
         apple = myBoard.setAppleCell(true);
         io.broadcast({ apple: apple });
         console.log('broadcasted coordinates: ' + apple.x + ', ' + apple.y);
+        break;
+      case 'start':
+        moveInterval = setInterval(function() {
+          var snakeMoves = [];
+
+          // send all snake moves in one message.
+          for (var id in myBoard.snakes) {
+            var snake  = myBoard.snakes[id],
+                msgObj = moveSnake(snake);
+
+            if (!msgObj) {
+              msgObj = handleDeath(snake.playerId);
+              io.broadcast(msgObj);
+            }
+            else {
+              snakeMoves.push(msgObj);
+            }
+
+          }
+          if (appleCountdown > 0) {
+            --appleCountdown;
+          }
+          io.broadcast({ type: 'allMove', moves: snakeMoves });
+          //console.log('move');
+        }, SPEED);
+        break;
+      case 'stop':
+        clearInterval(moveInterval);
         break;
       default:
         // do error handling?
@@ -275,4 +364,20 @@ io.on('connection', function(client) {
     deletePlayer(client.sessionId);
     console.log(client.sessionId + '\'s snake left the world. Diablo\'s minions grow weaker.');
   });
+
+  var handleDeath = function(playerId) {
+    var gameover = myBoard.kill(playerId),
+        msgObj   = null;
+
+    if (gameover) {
+      gameover = true;
+      clearInterval(moveInterval);
+      msgObj = { type: 'gameover' };
+    }
+    else {
+      msgObj = { type: 'death', playerId: playerId };
+    }
+
+    return msgObj;
+  };
 });

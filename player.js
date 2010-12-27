@@ -1,14 +1,20 @@
 var Player = function(id) {
   // default values
-  this.clientId = -1;
-  this.playerId = id;
-  this.startingPos = null;
-  this.snake = null;
+  this.clientId     = -1;
+  this.playerId     = id;
+  this.startingPos  = null;
+  this.startingDx   = 0;
+  this.startingDy   = 0;
+  this.snake        = null;
 
+  // @snake: empty snake object
   this.initSnake = function(snake) {
-    this.snake = snake;
-    this.snake.id = this.clientId; // visible only to server
+    this.snake          = snake;
+    this.snake.id       = this.clientId; // visible only to server
     this.snake.playerId = this.playerId;
+    this.snake.dx       = this.startingDx;
+    this.snake.dy       = this.startingDy;
+
     if (this.color) {
       this.snake.color = this.color;
     }

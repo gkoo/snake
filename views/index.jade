@@ -7,8 +7,11 @@ ul#world
         -for (var j=0; j<dimSize; j++)
           li
 div#rip
-input(type='button',value='Players Ready')
+input#startbtn(type='button',value='Start')
+input#stopbtn(type='button',value='Stop')
 input#applebtn(type='button',value='Add Apple')
+div.debug
+  p Debug
 
 script(src='/javascripts/jquery-1.4.4.min.js')
 script(src='/socket.io/socket.io.js')

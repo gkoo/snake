@@ -1,6 +1,30 @@
 var dimsize = $('#world').children('li').length,
     myBoard = new Board(dimsize),
-    mySessionId = 0;
+    mySessionId = 0,
+    debug = function(str) {
+      var elem = $('<p>');
+      elem.text(str);
+      $('.debug').append(elem);
+    };
+
+
+
+var doMove = function(playerId, newX, newY, grow) {
+  var snake = myBoard.getSnakeByPlayerId(playerId);
+  var updateCoords = snake.move(newX, newY, grow);
+
+  var oldtail = updateCoords.oldtail;
+  var newhead = updateCoords.newhead;
+
+  // oldtail is null if snake just ate the apple.
+  if (oldtail) {
+    myBoard.setEmptyCell(oldtail.x, oldtail.y);
+    myBoard.redrawCoord(oldtail.x, oldtail.y, snake.color);
+  }
+
+  myBoard.setSnakeCell(newhead.x, newhead.y);
+  myBoard.redrawCoord(newhead.x, newhead.y, snake.color);
+};
 
 
 // SOCKET.IO STUFF
@@ -25,7 +49,6 @@ socket.on('message', function(obj){
       // Set "my" snake.
       if (i == 0) {
         myBoard.mysnake = newsnake;
-        console.log(myBoard.mysnake.color);
         $('.yourcolor').css('background-color', myBoard.mysnake.color);
       }
 
@@ -41,24 +64,40 @@ socket.on('message', function(obj){
   else if ('apple' in obj) {
     myBoard.addApple(obj.apple.x, obj.apple.y);
   }
-  else if ('type' in obj && obj.type == 'serverMove') {
-    var snake = myBoard.getSnakeByPlayerId(obj.playerId);
-    var updateCoords = snake.move(obj.x, obj.y, obj.grow);
+  else if ('type' in obj) {
+    switch(obj.type) {
+      case 'serverMove':
+        doMove(obj.playerId, obj.x, obj.y, obj.grow);
+        break;
 
-    var oldtail = updateCoords.oldtail;
-    var newhead = updateCoords.newhead;
+      case 'allMove':
+        if (typeof(obj.apple) !== 'undefined' && obj.apple) {
+          //myBoard.addApple(obj.apple.x, obj.apple.y);
+        }
+        for (var i=0; i<obj.moves.length; ++i) {
+          var move = obj.moves[i];
+          if (typeof(move.death) !== 'undefined') {
+            var i=0;
+            // TODO: handle death
+          }
+          else {
+            // It's a normal move.
+            debug('playerId: ' + move.playerId + ' | ' + move.x + ', ' + move.y);
+            doMove(move.playerId, move.x, move.y, move.grow);
+          }
+        }
+        break;
 
-    // oldtail is null if snake just ate the apple.
-    if (oldtail) {
-      myBoard.setEmptyCell(oldtail.x, oldtail.y);
-      myBoard.redrawCoord(oldtail.x, oldtail.y, snake.color);
+      case 'death':
+        if (myBoard.kill(obj.playerId)) {
+          // Game over.
+        }
+        break;
+
+      case 'gameover':
+        alert('game over!');
+        break;
     }
-
-    myBoard.setSnakeCell(newhead.x, newhead.y);
-    myBoard.redrawCoord(newhead.x, newhead.y, snake.color);
-  }
-  else if ('death' in obj) {
-    myBoard.kill(obj.death);
   }
   else if ('disconnect' in obj) {
     // remove snake from board.
@@ -75,4 +114,10 @@ socket.on('message', function(obj){
 
 $('#applebtn').click(function(e) {
   socket.send({ type : 'apple' });
+});
+$('#startbtn').click(function(e) {
+  socket.send({ type : 'start' });
+});
+$('#stopbtn').click(function(e) {
+  socket.send({ type : 'stop' });
 });

@@ -1,4 +1,6 @@
 Board.prototype.worldElem = $('#world');
+
+
 Board.prototype.getCellElem = function(x, y) {
   // get row
   var y = y+1, x = x+1, // nth-child works on 1-based values;
@@ -7,6 +9,16 @@ Board.prototype.getCellElem = function(x, y) {
 
   return col;
 };
+
+
+Board.prototype.showRip = function(playerId) {
+  var rip = document.getElementById('rip'),
+      listing = $('<p>').text('Player ' + playerId);
+
+  rip.append(listing);
+}
+
+
 Board.prototype.mysnake = null;
 
 // Capture keyboard input.

@@ -3,11 +3,15 @@ var Snake = function(/*optional*/snake) {
     this.body = snake.body;
     this.color = snake.color;
     this.playerId = snake.playerId;
+    this.dx = snake.dx;
+    this.dy = snake.dy;
   }
   else {
     this.body = []; // array of coordinate objects
     this.color = '#000'; // default black snake.
     this.playerId = null;
+    this.dx = 0;
+    this.dy = 0;
   }
 
   /*
@@ -20,6 +24,8 @@ var Snake = function(/*optional*/snake) {
     var oldtail = null,
         newhead = { x: x, y:y };
     this.body.unshift(newhead);
+
+    // only pop on server.
     if (typeof(grow) === 'undefined' || !grow) {
       oldtail = this.body.pop();
     }

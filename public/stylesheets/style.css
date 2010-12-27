@@ -21,6 +21,15 @@ li li { /* cell */
 p {
   float: left;
 }
+.debug {
+  float: none;
+  clear: both;
+  margin-top: 100px;
+  border: 1px solid black;
+}
+.debug p {
+  float: none;
+}
 .yourcolor {
   float: left;
   height: 50px;
